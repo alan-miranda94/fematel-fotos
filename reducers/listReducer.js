@@ -14,6 +14,7 @@ export const initialState = {
   inventario:[]
 }
 
+
 export const ListReducer = (state, action) => {
   switch (action.type) {
     //PEGA AS FOTOS E ATUALIZA NA LISTA
@@ -98,7 +99,12 @@ export const ListReducer = (state, action) => {
 
     case 'galeria':
         
-        return { ...state,[action.payload.list]:  action.payload.site}
+        return { 
+          ...state,
+          [action.payload.list]:  action.payload.site,
+          
+        
+        }
       
 
      

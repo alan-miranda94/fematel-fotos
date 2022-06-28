@@ -13,6 +13,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Menu, MenuItem, MenuDivider } from 'react-native-material-menu'
 import Toast from 'react-native-toast-message'
 import { ROT, SFP } from '../ROT-FPS'
+import { getRealm } from '../database/Realm'
+import uuid from 'react-native-uuid'
 
 
 export default props => {
@@ -28,7 +30,7 @@ export default props => {
   const [textDe, setTextDe] = React.useState("");
   const [textPara, setTextPara] = React.useState("")
   const [modalDePara, setModalDePara] = useState(false)
-
+  const [saved, setSaved] = useState(null)
   //pega a lista pelo reducer 
   const { state, dispatch } = useContext(ListContext)
   const [lista, setLista] = useState([])
@@ -42,14 +44,20 @@ export default props => {
 
 
 
-  }, [])
+  }, [saved])
 
   //MOSTRA A LISTA ATUAL
   useEffect(() => {
-   
     //
     //setDePara(newDePara)
-    //console.log('NL',state[route.params.listName][route.params.listName.length])
+
+    if (route.params.listName === 'galeria') {
+      setDePara(route.params.dePara)
+      setEquipamento({ MODELO: route.params.equipamento })
+      setSaved(route.params.id)
+
+
+    }
     setLista(state[route.params.listName])
   }, [state])
 
@@ -91,7 +99,7 @@ export default props => {
     Toast.show({
       type: 'info',
       text1: 'VERIFIQUE SE SELECIONOU',
-      text2:`- EQUIPAMENTO e o DE<>PARA`
+      text2: `- EQUIPAMENTO e o DE<>PARA`
     })
   }
 
@@ -103,19 +111,13 @@ export default props => {
         list: route.params.listName,
       }
     })
+    setSaved(null)
   }
 
   //SALVA AS IMAGEM ATUAL NO APARELHO
   const saveData = async (name, item) => {
     try {
-      // const site = {
-      //   dePara:dePara,
-      //   equipamento: equipamento['MODELO'],
-      //   list:item
-      // }
 
-      const jItem = JSON.stringify(item)
-      await AsyncStorage.setItem('@' + name, jItem)
       Toast.show({
         type: 'success',
         text1: 'Salvo com sucesso'
@@ -129,17 +131,70 @@ export default props => {
     }
   }
 
+
+
   //CHAMA SALVA FOTOS
   const pressSave = async () => {
-    // salvar item no assinc storage 
-    await saveData(route.params.title, lista).then(e => {
-      setVisible(false)
+   
+    if (equipamento && dePara) {
+      const realm = await getRealm()
+
+      try {
+        const data = {
+          _id: uuid.v4(),
+          name: route.params.title,
+          list: lista,
+          dePara: dePara,
+          equipamento: equipamento['MODELO'],
+          type: route.params.type
+
+        }
+
+        const reportExist = realm
+          .objects("Sites")
+          .filtered(`_id = '${saved}'`)[0]
+
+
+        realm.write(() => {
+
+          //se já exist então adicciona as alterações no existente 
+          if (reportExist) {
+            reportExist.list = lista
+            reportExist.dePara = dePara
+            reportExist.equipamento = equipamento['MODELO']
+            reportExist.type = route.params.type
+          } else {
+            const saving = realm.create('Sites', data)
+            setSaved(saving['_id'])
+          }
+        })
+
+        realm.close()
+        Toast.show({
+          type: 'success',
+          text1: 'Salvo com sucesso'
+        })
+        return
+      } catch (error) {
+        console.log(error)
+        Toast.show({
+          type: 'error',
+          text1: 'Erro ao Salvar'
+        })
+      } finally {
+        realm.close()
+        hideMenu()
+      }
+
+    }
+
+    hideMenu()
+    Toast.show({
+      type: 'info',
+      text1: 'VERIFIQUE SE SELECIONOU',
+      text2: `- EQUIPAMENTO e o DE<>PARA`
     })
-    // //limpa a lista
-    // dispatch({
-    //   type: 'zerar'
-    // })
-    // navigation.reset({ index: 0, routes: [{ name: 'Home' }] })
+
   }
 
   const pressFinalizar = async () => {
@@ -147,7 +202,9 @@ export default props => {
       dispatch({
         type: 'zerar'
       })
-
+      setDePara(null)
+      setSaved(null)
+      setEquipamento(null)
       navigation.navigate('Home')
     } catch (e) {
       console.log(e)
@@ -155,6 +212,7 @@ export default props => {
     }
 
   }
+
   //ESCONDE MENU
   const hideMenu = () => setVisible(false);
 
@@ -186,7 +244,7 @@ export default props => {
   }
 
   const handleDeParaAdd = () => {
-    const newDePara = dePara?[...dePara]:[]
+    const newDePara = dePara ? [...dePara] : []
     if (textDe && textPara) {
       newDePara.push(
         {
@@ -196,7 +254,7 @@ export default props => {
       )
       setDePara(newDePara)
       setModalDePara(false)
-    }else{
+    } else {
       Toast.show({
         type: 'info',
         text1: 'PREENCHA TODOS OS CAMPOS'
@@ -205,8 +263,8 @@ export default props => {
 
   }
 
-  const removeDePara = (file)=>{
-    const newDePara = dePara.filter((item)=>item.de !== file.de)
+  const removeDePara = (file) => {
+    const newDePara = dePara.filter((item) => item.de !== file.de)
     setDePara(newDePara)
   }
 
@@ -232,7 +290,7 @@ export default props => {
           >
             {
               //esta dando erro quando tem muitas fotos
-              //<MenuItem onPress={pressSave}><Text>Salvar</Text></MenuItem>
+              <MenuItem onPress={pressSave}><Text>Salvar</Text></MenuItem>
             }
             <MenuItem onPress={pressGerar}>Gerar Excel</MenuItem>
             <MenuItem onPress={pressClear}>Limpar</MenuItem>
@@ -265,7 +323,7 @@ export default props => {
             //ListFooterComponent={() => <Text style={styles.logo}>FROM MSTUDIO</Text>}
             renderItem={({ item }) => (
               <List.Item
-                key = {Math.random()}
+                key={Math.random()}
                 titleStyle={{ fontSize: 11 }}
                 title={`DE: ${item.de} PARA: ${item.para}`}
                 left={props => <IconButton {...props} icon="delete" size={26} onPress={() => removeDePara(item)} />}
@@ -336,7 +394,7 @@ export default props => {
             />
             <Text style={{ fontWeight: 'bold', color: 'white', }}>ADICIONAR DE - PARA</Text>
           </View>
-          <View style={{ height: 300, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' ,width:"90%",}}>
+          <View style={{ height: 300, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', width: "90%", }}>
 
             <TextInput
               style={{
@@ -422,7 +480,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     //paddingTop: Constants.statusBarHeight,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems:'center'
+    alignItems: 'center'
     //padding: 8,
 
   },
@@ -436,8 +494,8 @@ const styles = StyleSheet.create({
     borderTopStartRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    width:'90%'
-    
+    width: '90%'
+
   }
 });
 

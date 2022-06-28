@@ -13,6 +13,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Menu, MenuItem, MenuDivider } from 'react-native-material-menu'
 import Toast from 'react-native-toast-message'
 
+import { getRealm } from '../database/Realm'
+import uuid from 'react-native-uuid'
+
+
 export default props => {
   const [visible, setVisible] = useState(false)
   // //pega a lista pelo reducer 
@@ -25,10 +29,16 @@ export default props => {
   const [equipamentos, setEquipamentos] = useState(ROT)
   const [equipamento, setEquipamento] = useState(null)
   const [type, setType] = useState('Instalação')
-  
+  const [saved, setSaved] = useState(null)
   //MOSTRA A LISTA ATUAL
   useEffect(() => {
     //pode receber a lista da galeria 
+    if (route.params.route === 'galeria') {
+      setEquipamento({ MODELO: route.params.equipamento })
+      setType(route.params.type)
+      setSaved(route.params.id)
+    }
+
     setLista(state[route.params.listName])
 
   }, [state])
@@ -44,7 +54,7 @@ export default props => {
           title: route.params.title,
           listName: 'inventario',
           equipName: equipamento['MODELO'],
-          
+
         }
       )
       return
@@ -67,7 +77,7 @@ export default props => {
           title: route.params.title,
           inventario: true,
           equipName: equipamento['MODELO'],
-          type:type
+          type: type
         })
       return
     }
@@ -108,15 +118,66 @@ export default props => {
 
   //CHAMA SALVA FOTOS
   const pressSave = async () => {
-    // salvar item no assinc storage 
-    await saveData(route.params.title, lista).then(e => {
-      setVisible(false)
-    })
-    // //limpa a lista
-    // dispatch({
-    //   type: 'zerar'
-    // })
-    // navigation.reset({ index: 0, routes: [{ name: 'Home' }] })
+    if (type && equipamento && lista.length > 0) {
+
+      const realm = await getRealm()
+
+      try {
+        const data = {
+          _id: uuid.v4(),
+          name: route.params.title,
+          inventario: lista,
+          equipamento: equipamento['MODELO'],
+          type: type
+
+        }
+
+        //pega o que ja esta no banco de dados se existir
+        const reportExist = realm
+          .objects("Sites")
+          .filtered(`_id = '${saved}'`)[0]
+
+
+        realm.write(() => {
+
+          //se já exist então adicciona as alterações no existente 
+          if (reportExist) {
+            reportExist.inventario = lista
+            reportExist.equipamento = equipamento['MODELO']
+            reportExist.type = type
+          } else {
+            const saving = realm.create('Sites', data)
+            setSaved(saving['_id'])
+          }
+        })
+
+        realm.close()
+        Toast.show({
+          type: 'success',
+          text1: 'Salvo com sucesso'
+        })
+      } catch (error) {
+        console.log(error)
+        Toast.show({
+          type: 'error',
+          text1: 'Erro ao Salvar'
+        })
+      } finally {
+        realm.close()
+        hideMenu()
+      }
+    }else{
+      Toast.show({
+        type: 'info',
+        text1: 'ADICIONE ITEM OU SELECIONOU',
+        text2: `EQUIPAMENTO e o DE<>PARA`,
+        
+      })
+    }
+
+
+
+
   }
 
   //ESCONDE MENU
@@ -187,7 +248,7 @@ export default props => {
           >
             {
               //ESTA DANDO ERRO QUANDO TEM MUITAS IMAGENS
-              //<MenuItem onPress={pressSave}><Text>Salvar</Text></MenuItem>
+              <MenuItem onPress={pressSave}><Text>Salvar</Text></MenuItem>
             }
             <MenuItem onPress={pressGerar}>Gerar Excel</MenuItem>
             <MenuItem onPress={pressClear}>Limpar</MenuItem>
@@ -201,10 +262,10 @@ export default props => {
 
       <List.Section>
         <RadioButton.Group style={{ flexDirection: 'row-reverse', }} onValueChange={newType => setType(newType)} value={type}>
-          <View style={{ flexDirection: 'row', backgroundColor: "white" , width:'100%'}}>
-            <RadioButton.Item label="Instalação" value="Instalação" labelStyle={{fontSize:12}}/>
-            <RadioButton.Item label='Migração' value="Migração" labelStyle={{fontSize:12}}/>
-            <RadioButton.Item label='Ampliação' value="Ampliação" labelStyle={{fontSize:12}}/>
+          <View style={{ flexDirection: 'row', backgroundColor: "white", width: '100%' }}>
+            <RadioButton.Item label="Instalação" value="Instalação" labelStyle={{ fontSize: 12 }} />
+            <RadioButton.Item label='Migração' value="Migração" labelStyle={{ fontSize: 12 }} />
+            <RadioButton.Item label='Ampliação' value="Ampliação" labelStyle={{ fontSize: 12 }} />
           </View>
         </RadioButton.Group>
         <List.Accordion

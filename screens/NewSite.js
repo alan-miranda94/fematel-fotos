@@ -12,6 +12,10 @@ import { Button, Checkbox } from 'react-native-paper'
 import Constants from 'expo-constants'
 import Toast from 'react-native-toast-message'
 
+
+import Realm from 'realm'
+
+
 export default props => {
   //const { otherParam , title} = props.route.params  
   const coverRef = useRef()
@@ -34,7 +38,7 @@ export default props => {
 
   const onCapture = useCallback(async () => coverRef.current.capture())
 
-  const pressButton = async (title, listName,type ) => {
+  const pressButton = async (title, listName, type ) => {
     if (!title) {
       alert('DIGITE O NOME DO SITE')
       return
